@@ -1,8 +1,4 @@
-# minion
-A new programming language dedicated to artificial intelligence
-
-
-# Minion Specification
+# AILang Specification
 
 ## 1. Core Principles
 - Strong static typing
@@ -16,7 +12,7 @@ A new programming language dedicated to artificial intelligence
 ```
 int x = 5
 float y = 3.14
-string name = "Minion"
+string name = "AILang"
 ```
 
 ### Function Declarations
@@ -55,7 +51,7 @@ e = Tensor.matmul(a, b)  # Matrix multiplication
 ```
 
 ## 6. Memory Management
-Minion uses automatic memory management. Complex objects like tensors and neural networks are handled by reference:
+AILang uses automatic memory management. Complex objects like tensors and neural networks are handled by reference:
 
 ```
 def process_tensor(t: Tensor[float, [3, 3]]) -> Tensor[float, [3, 3]]:
@@ -114,98 +110,280 @@ def apply_to_tensor(t: Tensor[float, [Any]], f: Callable[[float], float]) -> Ten
 squared = apply_to_tensor(some_data, lambda x: x * x)
 ```
 
-# Minion Specification - Performance Optimized
+## 13. Concurrency with AITasks
 
-[Previous sections remain largely unchanged]
+AILang introduces AITasks, lightweight concurrent functions similar to Go's goroutines. AITasks allow for easy and efficient concurrent programming.
 
-## 11. Performance Optimization Features
+### 13.1 Creating AITasks
 
-### 11.1 Ahead-of-Time (AOT) Compilation
-Minion uses AOT compilation to native machine code for maximum performance:
-
-```
-minion compile --optimize myprogram.ai
-```
-
-### 11.2 SIMD and Vectorization
-Built-in support for SIMD (Single Instruction, Multiple Data) operations:
+Use the `aitask` keyword to create a new AITask:
 
 ```
-def vector_add(a: Vector[float, 4], b: Vector[float, 4]) -> Vector[float, 4]:
-    return SIMD.add(a, b)
+def long_running_operation(x: int) -> int:
+    # Some time-consuming operation
+    return x * x
+
+# Start an AITask
+aitask long_running_operation(42)
 ```
 
-### 11.3 GPU Acceleration
-Native GPU support for tensor operations and neural network training:
+### 13.2 Channels for Communication
+
+AITasks can communicate using channels:
 
 ```
-@gpu_accelerated
-def train_model(model: NeuralNetwork, data: Dataset[float]) -> NeuralNetwork:
-    # This function will automatically use GPU acceleration
-    ...
+Channel[T] represents a channel of type T
+
+def producer(ch: Channel[int]):
+    for i in range(10):
+        ch.send(i)
+    ch.close()
+
+def consumer(ch: Channel[int]):
+    while true:
+        value, ok = ch.receive()
+        if not ok:
+            break
+        print(value)
+
+ch = Channel[int](capacity=5)  # Buffered channel with capacity 5
+aitask producer(ch)
+aitask consumer(ch)
 ```
 
-### 11.4 Parallel Processing
-Easy-to-use parallel processing constructs:
+### 13.3 Select Statement
+
+AILang provides a `select` statement for handling multiple channels:
 
 ```
-@parallel
-def process_batch(batch: Tensor[float, [64, 224, 224, 3]]) -> Tensor[float, [64, 1000]]:
-    # This function will automatically be parallelized
-    ...
+def process(ch1: Channel[int], ch2: Channel[int], quit: Channel[bool]):
+    while true:
+        select:
+            case x = <-ch1:
+                print(f"Received {x} from ch1")
+            case y = <-ch2:
+                print(f"Received {y} from ch2")
+            case <-quit:
+                print("Quit")
+                return
 ```
 
-### 11.5 Memory Pool Allocation
-Efficient memory management for frequently allocated objects:
+### 13.4 AITask Synchronization
+
+For synchronization, AILang provides a `WaitGroup`:
 
 ```
-with MemoryPool() as pool:
-    for _ in range(1000):
-        tensor = pool.alloc(Tensor[float, [1000, 1000]])
-        # Use tensor...
+def worker(id: int, wg: WaitGroup):
+    print(f"Worker {id} starting")
+    # Do work...
+    print(f"Worker {id} done")
+    wg.done()
+
+def main():
+    num_workers = 5
+    wg = WaitGroup()
+    
+    for i in range(num_workers):
+        wg.add(1)
+        aitask worker(i, wg)
+    
+    wg.wait()
+    print("All workers completed")
 ```
 
-### 11.6 Zero-Copy Operations
-Perform operations on data without unnecessary copying:
+### 13.5 AITask Pools
+
+For managing a pool of worker AITasks:
 
 ```
-def process_large_tensor(t: Tensor[float, [1000000]]) -> Tensor[float, [1000000]]:
-    return Tensor.zero_copy_map(t, lambda x: x * 2)
+def worker_pool(tasks: Channel[Callable[[], None]], results: Channel[Any], num_workers: int):
+    def worker():
+        while true:
+            task = tasks.receive()
+            if task is None:
+                break
+            result = task()
+            results.send(result)
+    
+    workers = [aitask worker() for _ in range(num_workers)]
+    return workers
+
+# Usage
+tasks = Channel[Callable[[], None]](100)
+results = Channel[Any](100)
+workers = worker_pool(tasks, results, 10)
+
+# Send tasks
+for task in list_of_tasks:
+    tasks.send(task)
+
+# Collect results
+for _ in range(len(list_of_tasks)):
+    result = results.receive()
+    process_result(result)
 ```
 
-### 11.7 Compile-Time Function Execution
-Allow certain functions to be executed at compile-time:
+### 13.6 Context for Cancellation
+
+AILang provides a Context type for managing cancellations:
 
 ```
-@compiletime
-def compute_constants() -> Tensor[float, [1000]]:
-    # This function will be executed during compilation
-    ...
+def long_running_task(ctx: Context):
+    while true:
+        select:
+            case <-ctx.done():
+                print("Task cancelled")
+                return
+            default:
+                # Do some work
+                ...
 
-CONSTANTS = compute_constants()
+def main():
+    ctx = Context.background()
+    ctx, cancel = ctx.with_timeout(seconds=5)
+    
+    aitask long_running_task(ctx)
+    
+    # Cancel after 3 seconds
+    sleep(3)
+    cancel()
 ```
 
-### 11.8 Optimized Standard Library
-Provide highly optimized implementations of common AI operations:
+## 13. Concurrency with AITasks
+
+AILang introduces AITasks, lightweight concurrent functions similar to Go's goroutines. AITasks allow for easy and efficient concurrent programming.
+
+### 13.1 Creating AITasks
+
+Use the `aitask` keyword to create a new AITask:
 
 ```
-result = FastMath.matrix_multiply(a, b)  # Uses optimized BLAS implementation
+def long_running_operation(x: int) -> int:
+    # Some time-consuming operation
+    return x * x
+
+# Start an AITask
+aitask long_running_operation(42)
 ```
 
-### 11.9 Profile-Guided Optimization
-Support for profile-guided optimization to further improve performance:
+### 13.2 Channels for Communication
+
+AITasks can communicate using channels:
 
 ```
-minion compile --profile myprogram.ai
-./myprogram  # Run program to gather profiling data
-minion compile --optimize --use-profile myprogram.ai
+Channel[T] represents a channel of type T
+
+def producer(ch: Channel[int]):
+    for i in range(10):
+        ch.send(i)
+    ch.close()
+
+def consumer(ch: Channel[int]):
+    while true:
+        value, ok = ch.receive()
+        if not ok:
+            break
+        print(value)
+
+ch = Channel[int](capacity=5)  # Buffered channel with capacity 5
+aitask producer(ch)
+aitask consumer(ch)
 ```
 
-## 12. Performance Best Practices
+### 13.3 Select Statement
 
-1. Use strongly-typed tensors to enable compile-time optimizations.
-2. Leverage built-in SIMD and GPU acceleration features for computationally intensive tasks.
-3. Use zero-copy operations when possible to minimize data movement.
-4. Utilize the memory pool for frequent allocations in performance-critical sections.
-5. Consider using compile-time function execution for constant computations.
-6. Profile your code and use profile-guided optimization for production builds.
+AILang provides a `select` statement for handling multiple channels:
+
+```
+def process(ch1: Channel[int], ch2: Channel[int], quit: Channel[bool]):
+    while true:
+        select:
+            case x = <-ch1:
+                print(f"Received {x} from ch1")
+            case y = <-ch2:
+                print(f"Received {y} from ch2")
+            case <-quit:
+                print("Quit")
+                return
+```
+
+### 13.4 AITask Synchronization
+
+For synchronization, AILang provides a `WaitGroup`:
+
+```
+def worker(id: int, wg: WaitGroup):
+    print(f"Worker {id} starting")
+    # Do work...
+    print(f"Worker {id} done")
+    wg.done()
+
+def main():
+    num_workers = 5
+    wg = WaitGroup()
+    
+    for i in range(num_workers):
+        wg.add(1)
+        aitask worker(i, wg)
+    
+    wg.wait()
+    print("All workers completed")
+```
+
+### 13.5 AITask Pools
+
+For managing a pool of worker AITasks:
+
+```
+def worker_pool(tasks: Channel[Callable[[], None]], results: Channel[Any], num_workers: int):
+    def worker():
+        while true:
+            task = tasks.receive()
+            if task is None:
+                break
+            result = task()
+            results.send(result)
+    
+    workers = [aitask worker() for _ in range(num_workers)]
+    return workers
+
+# Usage
+tasks = Channel[Callable[[], None]](100)
+results = Channel[Any](100)
+workers = worker_pool(tasks, results, 10)
+
+# Send tasks
+for task in list_of_tasks:
+    tasks.send(task)
+
+# Collect results
+for _ in range(len(list_of_tasks)):
+    result = results.receive()
+    process_result(result)
+```
+
+### 13.6 Context for Cancellation
+
+AILang provides a Context type for managing cancellations:
+
+```
+def long_running_task(ctx: Context):
+    while true:
+        select:
+            case <-ctx.done():
+                print("Task cancelled")
+                return
+            default:
+                # Do some work
+                ...
+
+def main():
+    ctx = Context.background()
+    ctx, cancel = ctx.with_timeout(seconds=5)
+    
+    aitask long_running_task(ctx)
+    
+    # Cancel after 3 seconds
+    sleep(3)
+    cancel()
+```
